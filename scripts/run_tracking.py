@@ -88,7 +88,7 @@ def color_for_id(track_id: int) -> Tuple[int, int, int]:
     return tuple(int(c) for c in rng.integers(64, 255, size=3))
 
 
-def detect(detector: YOLO, frame: np.ndarray, conf: float, iou: float) -> np.ndarray:
+def detect(detector: YOLO, frame: np.ndarray, conf: float, iou: float, device: str) -> np.ndarray:
     """Chạy detector và trả về hộp người trên một frame.
 
     Args:
@@ -96,6 +96,7 @@ def detect(detector: YOLO, frame: np.ndarray, conf: float, iou: float) -> np.nda
         frame: Ảnh BGR.
         conf: Ngưỡng confidence của detector.
         iou: Ngưỡng IoU cho NMS của detector.
+        device: Thiết bị chạy detector, cùng thiết bị với tracker.
 
     Returns:
         Mảng ``(N, 6)`` với mỗi hàng là ``[x1, y1, x2, y2, conf, cls]``.
@@ -107,6 +108,7 @@ def detect(detector: YOLO, frame: np.ndarray, conf: float, iou: float) -> np.nda
         iou=iou,
         imgsz=IMG_SIZE,
         classes=[PERSON_CLASS_ID],
+        device=device,
         verbose=False,
     )[0]
     if results.boxes is None or len(results.boxes) == 0:
@@ -153,7 +155,7 @@ def run(args: argparse.Namespace) -> None:
             continue
         n_frames += 1
 
-        dets = detect(detector, frame, conf=args.conf, iou=args.iou)
+        dets = detect(detector, frame, conf=args.conf, iou=args.iou, device=args.device)
         tracks = tracker.update(dets, frame)
 
         for track in tracks:

@@ -28,34 +28,18 @@ from pathlib import Path
 PRACTICE_VIDEO = "video_1"
 
 
-def _patch_numpy_aliases() -> None:
-    """TrackEval còn gọi np.float / np.int (đã bỏ từ NumPy 1.24)."""
-    import numpy as np
-
-    if not hasattr(np, "float"):
-        np.float = float  # type: ignore[attr-defined]
-    if not hasattr(np, "int"):
-        np.int = int  # type: ignore[attr-defined]
-
-
 def _load_eval_config(lab_data_root: Path) -> dict:
-    """Đọc cấu hình chấm đi kèm nhãn video luyện.
+    """Đọc cấu hình chấm hoặc dùng giá trị mặc định cho gói ảnh lab.
 
     Args:
         lab_data_root: Thư mục lab_data giảng viên phát.
 
     Returns:
-        Dict có khóa ``benchmark`` và có thể có ``split``.
-
-    Raises:
-        FileNotFoundError: Khi thiếu ``video_1/eval_config.json``.
+        Dict có khóa ``benchmark`` và ``split``.
     """
     config_path = lab_data_root / PRACTICE_VIDEO / "eval_config.json"
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Không thấy {config_path}. Dùng đúng gói lab_data giảng viên phát "
-            "(file này đi kèm nhãn của video luyện)."
-        )
+        return {"benchmark": "LAB21", "split": "train"}
     return json.loads(config_path.read_text())
 
 
@@ -105,6 +89,11 @@ def run_trackeval(trackeval_root: Path, run_name: str, benchmark: str, split: st
     """
     cmd = [
         sys.executable,
+        "-c",
+        "import sys, runpy, numpy as np; "
+        "np.float = float; np.int = int; "
+        "sys.argv = sys.argv[1:]; "
+        "runpy.run_path(sys.argv[0], run_name='__main__')",
         str(trackeval_root / "scripts" / "run_mot_challenge.py"),
         "--GT_FOLDER", str(trackeval_root / "data" / "gt" / "mot_challenge"),
         "--TRACKERS_FOLDER", str(trackeval_root / "data" / "trackers" / "mot_challenge"),
@@ -125,7 +114,6 @@ def main() -> None:
     Raises:
         SystemExit: Khi file nộp không phải ``video_1.txt``.
     """
-    _patch_numpy_aliases()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--trackeval-root", required=True, type=Path)
     parser.add_argument("--lab-data-root", required=True, type=Path)

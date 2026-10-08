@@ -1,0 +1,69 @@
+Trong 2 giờ, mỗi nhóm 2 học viên dùng một máy để chọn cấu hình theo dõi người phù hợp cho 5 cảnh quay. Các bạn không cần viết tracker từ đầu: chương trình đã có detector YOLO và 5 tracker để thử.
+
+Mục tiêu là trả lời bằng kết quả quan sát: tracker nào giữ ID ổn hơn trong từng cảnh, và vì sao? Cuối buổi, nhóm nộp 5 file kết quả video_1.txt đến video_5.txt cùng báo cáo đã điền.
+
+Video	Đặc điểm cần chú ý	Cách đánh giá trong lab
+video_1	Quảng trường ban ngày, camera tĩnh, mật độ vừa	Có nhãn; xem video và đọc HOTA, MOTA, IDF1
+video_2	Phố đêm, camera tĩnh trên cao, rất đông	Xem bằng mắt
+video_3	Camera di chuyển, ảnh nhỏ, ít frame mỗi giây	Xem bằng mắt
+video_4	Trong nhà, camera tiến tới, có phản chiếu kính	Xem bằng mắt
+video_5	Góc nhìn trên xe bus, giao lộ đông, rung lắc	Xem bằng mắt
+Chỉ video_1 có nhãn trong gói lab. Với video_2–video_5, các bạn mô tả điều nhìn thấy; không tự điền điểm HOTA, MOTA hoặc IDF1.
+Cài đặt môi trường
+Mở terminal tại thư mục gốc của project. Tạo môi trường và cài TrackEval một lần:
+
+conda env create -f environment.yml
+conda activate cv_robotics_lab21
+git clone https://github.com/JonathonLuiten/TrackEval.git TrackEval
+pip install -e TrackEval/
+Chép
+Ở những buổi chạy sau, chỉ cần conda activate cv_robotics_lab21. Tải gói dữ liệu 5 video theo README, giải nén và đặt LAB_DATA trỏ đến thư mục chứa trực tiếp video_1 … video_5:
+
+export LAB_DATA=/đường/dẫn/lab_data
+python scripts/check_data.py --lab-data-root "$LAB_DATA"
+Chép
+Kết quả mong đợi: cả 5 video có ảnh .jpg trong img1/; video_1 báo có nhãn. Nếu báo thiếu ảnh, kiểm tra lại đường dẫn và gói đã giải nén. Dùng kernel cv_robotics_lab21 khi mở on_tap_metrics.ipynb; hãy mở notebook từ terminal đã đặt LAB_DATA.
+Kiến thức nền — Detector, tracker và cách đọc kết quả
+Detector YOLO tìm hộp người ở từng frame. Một hộp phát hiện chưa có ID. Tracker nối các hộp qua thời gian để cùng một người giữ cùng một ID.
+IoU đo độ chồng lấp của hai hộp. Việc ghép hộp giữa các frame là một phần của tracking; các bạn đã học cách ghép tối ưu bằng Hungarian. Trong lab này, --iou là ngưỡng IoU của NMS trong detector, không phải ngưỡng ghép ID của tracker.
+--conf là ngưỡng tin cậy của YOLO. Đặt quá cao có thể bỏ sót người nhỏ hoặc tối; đặt quá thấp có thể tạo thêm hộp giả.
+bytetrack, ocsort chủ yếu dùng thông tin chuyển động. botsort, strongsort, deepocsort dùng thêm đặc trưng ngoại hình (Re-ID) để hỗ trợ giữ ID.
+MOTA bị ảnh hưởng bởi bỏ sót, hộp giả và số lần đổi ID. IDF1 phản ánh khả năng giữ đúng danh tính qua các frame. HOTA cân bằng chất lượng phát hiện và liên kết danh tính.
+Detector yolo26n.pt, kích thước ảnh 640 px, lớp người và trọng số Re-ID osnet_x0_25_msmt17.pt đã cố định. Trong bài nộp chính, các bạn chỉ chọn --tracker, --conf và --iou cho từng video; --conf và --iou đều là tham số của detector.
+Quan sát cảnh và nêu giả thuyết (CP1)
+1. Xem preview/video_1.mp4 … preview/video_5.mp4 trong gói dữ liệu để nhận ra cảnh đông, camera di chuyển, ánh sáng yếu hoặc người che khuất nhau.
+2. Mở on_tap_metrics.ipynb, đọc bảng MOTA / IDF1 / HOTA và hoàn thành 3 câu True/False. Chạy phần YOLO trên một ảnh của video_1: hộp người đã có, nhưng chưa có ID.
+3. Viết một dự đoán ngắn cho ít nhất hai cảnh. Ví dụ: “Cảnh đông dễ lẫn người khi họ cắt ngang nhau; tôi muốn so sánh ByteTrack với một tracker có Re-ID.” Đây là giả thuyết để kiểm tra, chưa phải kết luận.
+Xong CP1 khi: dữ liệu được kiểm tra, notebook chạy được và nhóm có dự đoán để đối chiếu với video kết quả.
+
+Chạy baseline đầu tiên trên `video_1` (CP2)
+Chạy ByteTrack trên tối đa 150 frame để kiểm tra toàn bộ luồng detector → tracker → video có vẽ ID:
+
+python scripts/run_tracking.py \
+  --source "$LAB_DATA/video_1/img1" \
+  --seq-name video_1 \
+  --tracker bytetrack --conf 0.3 --iou 0.5 \
+  --out runs/thu_nhanh --save-video --max-frames 150
+Chép
+Mở runs/thu_nhanh/video_1_preview.mp4. Mỗi ID có một màu ổn định: nếu một người đang đi mà ID hoặc màu đổi giữa chừng, đó là dấu hiệu đổi danh tính. File runs/thu_nhanh/video_1.txt là kết quả của bản thử 150 frame, chưa phải file nộp. Lệnh mặc định chạy CPU; nếu máy có GPU phù hợp, có thể thêm --device cuda:0 để chạy nhanh hơn.
+
+Xong CP2 khi: nhóm chỉ ra được ít nhất một đoạn ID giữ ổn hoặc một lỗi nhìn thấy trong video baseline.
+
+Thí nghiệm chính — Chọn cấu hình cho 5 video (CP3)
+Với mỗi video, hãy thử ít nhất một tracker thiên về chuyển động (bytetrack hoặc ocsort) và một tracker có Re-ID (botsort, strongsort hoặc deepocsort). Dùng các thư mục --out khác nhau cho các bản thử để kết quả không ghi đè lên nhau.
+
+Khi đã tìm được tracker có vẻ hợp hơn, thử --conf ở 0.15 / 0.3 / 0.5 và --iou ở 0.4 / 0.5 / 0.7. Mỗi lượt chỉ đổi một tham số để biết thay đổi nào gây ra khác biệt. Ghi lại cấu hình đã thử nhưng loại, cùng lý do quan sát được.
+
+Sau khi chọn cấu hình cho một video, chạy lại đủ frame vào runs/nop_bai/. Ví dụ cho video_2:
+
+python scripts/run_tracking.py \
+  --source "$LAB_DATA/video_2/img1" \
+  --seq-name video_2 \
+  --tracker strongsort --conf 0.25 --iou 0.5 \
+  --out runs/nop_bai --save-video
+Chép
+Lặp lại với tên video và cấu hình nhóm đã chọn cho video_1 đến video_5. --max-frames 150 chỉ dùng lúc thử nhanh; bỏ tham số này ở mọi lượt tạo file nộp. Nếu máy chậm, giảm số lượt thử ở video đông nhưng vẫn tạo đủ 5 file toàn bộ frame.
+
+Xong CP3 khi: runs/nop_bai/ có video_1.txt … video_5.txt, mỗi file ứng với đúng video và cấu hình được ghi trong báo cáo.
+
+
